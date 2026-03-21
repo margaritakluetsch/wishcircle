@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold: #C9A84C;
+  --gold-light: #E8D08A;
+  --cream: #FAF7F2;
+  --warm: #F0E8D8;
+  --dark: #1A1410;
+  --mid: #5A4A3A;
+  --soft: #9A8878;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--dark);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.font-serif { font-family: 'Playfair Display', Georgia, serif; }
+
+/* PROGRESS BAR */
+.progress-bar {
+  height: 6px;
+  background: var(--warm);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+/* CARD */
+.wish-card {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(26,20,16,0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.wish-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(26,20,16,0.13);
+}
+
+/* HERO */
+.hero-gradient {
+  background: linear-gradient(135deg, #1a1410 0%, #2e1f14 55%, #1a1410 100%);
+}
+.hero-glow {
+  background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.25) 0%, transparent 65%);
+}
+
+/* BUTTON */
+.btn-gold {
+  background: var(--gold);
+  color: white;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 500;
+  transition: background 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.btn-gold:hover { background: #b8932e; }
+.btn-dark {
+  background: var(--dark);
+  color: white;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 500;
+  transition: background 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.btn-dark:hover { background: var(--mid); }
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--warm);
+  color: var(--mid);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.btn-outline:hover { border-color: var(--gold); color: var(--dark); }
+
+/* INPUT */
+.input-base {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--warm);
+  border-radius: 9px;
+  background: var(--cream);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color: var(--dark);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input-base:focus { border-color: var(--gold); }
+
+/* CHIP */
+.chip {
+  background: var(--warm);
+  border-radius: 8px;
+  padding: 2px 9px;
+  font-size: 11px;
+  color: var(--mid);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26,20,16,0.7);
+  backdrop-filter: blur(5px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-box {
+  background: white;
+  border-radius: 18px;
+  padding: 28px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+
+/* GIFT CARD */
+.gift-card-bg {
+  background: linear-gradient(135deg, #1a1410 0%, #241510 60%, #1a1410 100%);
+  border: 1px solid rgba(201,168,76,0.3);
+}
+.gift-card-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.2) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* TAG */
+.tag { font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; padding: 3px 9px; border-radius: 7px; }
+.tag-product { background: #e8f4fd; color: #1a6fa8; }
+.tag-event { background: #fef9e7; color: #b7770d; }
+.tag-voucher { background: #f3e8ff; color: #6c3483; }
+.tag-local { background: #eafaf1; color: #2e7d4f; }
+.tag-other { background: #f5f5f5; color: #666; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--warm); }
+::-webkit-scrollbar-thumb { background: var(--gold-light); border-radius: 3px; }
+
+/* ANIMATIONS */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { animation: spin 1s linear infinite; }
