@@ -22,17 +22,14 @@ export default function WishlistPage() {
   const [isCoord, setIsCoord] = useState(false)
   const [loading, setLoading] = useState(true)
   const [pendingGuests, setPendingGuests] = useState<WishlistGuest[]>([])
-
-  // Modals
   const [activeWish, setActiveWish] = useState<Wish | null>(null)
   const [showContrib, setShowContrib] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [showAddWish, setShowAddWish] = useState(false)
+  const [showEditWish, setShowEditWish] = useState(false)
   const [showCoordLogin, setShowCoordLogin] = useState(false)
-  const [showVote, setShowVote] = useState(false)
-  const [showCard, setShowCard] = useState(false)
-
-  // Forms
+  const [showEditContrib, setShowEditContrib] = useState(false)
+  const [editContrib, setEditContrib] = useState<Contribution | null>(null)
   const [contribName, setContribName] = useState('')
   const [contribAmt, setContribAmt] = useState('')
   const [coordPin, setCoordPin] = useState('')
@@ -41,14 +38,23 @@ export default function WishlistPage() {
   const [newMsg, setNewMsg] = useState('')
   const [votes, setVotes] = useState<Record<string, string>>({})
   const [leaders, setLeaders] = useState<Record<string, string>>({})
-
-  // Add wish form
+  // Add wish
   const [wTitle, setWTitle] = useState('')
   const [wDesc, setWDesc] = useState('')
   const [wCat, setWCat] = useState('product')
   const [wPrice, setWPrice] = useState('')
   const [wUrl, setWUrl] = useState('')
   const [wSingle, setWSingle] = useState(false)
+  // Edit wish
+  const [ewId, setEwId] = useState('')
+  const [ewTitle, setEwTitle] = useState('')
+  const [ewDesc, setEwDesc] = useState('')
+  const [ewCat, setEwCat] = useState('product')
+  const [ewPrice, setEwPrice] = useState('')
+  const [ewUrl, setEwUrl] = useState('')
+  // Edit contrib
+  const [ecName, setEcName] = useState('')
+  const [ecAmt, setEcAmt] = useState('')
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -63,25 +69,19 @@ export default function WishlistPage() {
     const { data: wl } = await supabase.from('wishlists').select('*').eq('slug', slug).single()
     if (!wl) { router.push('/'); return }
     setWishlist(wl)
-
     if (currentUser) {
       setIsOwner(wl.owner_id === currentUser.id)
       if (wl.owner_id !== currentUser.id) {
         const { data: guest } = await supabase.from('wishlist_guests')
           .select('*').eq('wishlist_id', wl.id).eq('user_id', currentUser.id).single()
         if (!guest) {
-          // Auto-join
           await supabase.from('wishlist_guests').insert({ wishlist_id: wl.id, user_id: currentUser.id })
           setGuestStatus('pending')
-        } else {
-          setGuestStatus(guest.status)
-        }
+        } else { setGuestStatus(guest.status) }
       }
     }
-
     const { data: ws } = await supabase.from('wishes').select('*').eq('wishlist_id', wl.id).order('created_at')
     setWishes(ws || [])
-
     if (ws) {
       const contribMap: Record<string, Contribution[]> = {}
       const voteMap: Record<string, string> = {}
@@ -103,13 +103,11 @@ export default function WishlistPage() {
       setVotes(voteMap)
       setLeaders(leaderMap)
     }
-
     if (currentUser && wl.owner_id === currentUser.id) {
       const { data: pg } = await supabase.from('wishlist_guests').select('*, profiles(name,avatar_url)')
         .eq('wishlist_id', wl.id).eq('status', 'pending')
       setPendingGuests(pg || [])
     }
-
     setLoading(false)
   }
 
@@ -129,6 +127,21 @@ export default function WishlistPage() {
     loadPage(user)
   }
 
+  const openEditWish = (w: Wish) => {
+    setEwId(w.id); setEwTitle(w.title); setEwDesc(w.description||'')
+    setEwCat(w.category); setEwPrice(w.target_price?.toString()||''); setEwUrl(w.purchase_url||'')
+    setShowEditWish(true)
+  }
+
+  const saveEditWish = async () => {
+    await supabase.from('wishes').update({
+      title: ewTitle, description: ewDesc, category: ewCat,
+      target_price: parseFloat(ewPrice)||0, purchase_url: ewUrl
+    }).eq('id', ewId)
+    setShowEditWish(false)
+    loadPage(user)
+  }
+
   const deleteWish = async (wishId: string) => {
     if (!confirm('Wunsch wirklich löschen?')) return
     await supabase.from('wishes').delete().eq('id', wishId)
@@ -139,10 +152,29 @@ export default function WishlistPage() {
     if (!contribName || !contribAmt || !activeWish || !user) return
     await supabase.from('contributions').insert({
       wish_id: activeWish.id, user_id: user.id,
-      display_name: contribName, amount: parseFloat(contribAmt),
-      status: 'confirmed'
+      display_name: contribName, amount: parseFloat(contribAmt), status: 'confirmed'
     })
     setShowContrib(false); setContribName(''); setContribAmt('')
+    loadPage(user)
+  }
+
+  const openEditContrib = (c: Contribution) => {
+    setEditContrib(c); setEcName(c.display_name); setEcAmt(c.amount.toString())
+    setShowEditContrib(true)
+  }
+
+  const saveEditContrib = async () => {
+    if (!editContrib) return
+    await supabase.from('contributions').update({
+      display_name: ecName, amount: parseFloat(ecAmt)
+    }).eq('id', editContrib.id)
+    setShowEditContrib(false); setEditContrib(null)
+    loadPage(user)
+  }
+
+  const deleteContrib = async (contribId: string) => {
+    if (!confirm('Beitrag wirklich löschen?')) return
+    await supabase.from('contributions').delete().eq('id', contribId)
     loadPage(user)
   }
 
@@ -159,7 +191,6 @@ export default function WishlistPage() {
     setMessages(data || [])
     setShowChat(true)
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-
     supabase.channel('chat-'+wish.id)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `wish_id=eq.${wish.id}` },
         payload => { setMessages(prev => [...prev, payload.new as Message]) })
@@ -192,6 +223,13 @@ export default function WishlistPage() {
     loadPage(user)
   }
 
+  const shareLink = () => {
+    const url = window.location.href
+    navigator.clipboard.writeText(url).then(() => {
+      alert('🎉 Link kopiert!\n\nSchicke diesen Link per WhatsApp, E-Mail oder SMS an deine Gäste:\n\n' + url)
+    })
+  }
+
   const collected = (wishId: string) => (contributions[wishId]||[]).reduce((s,c)=>s+c.amount,0)
   const pct = (w: Wish) => w.target_price > 0 ? Math.min(100, Math.round(collected(w.id)/w.target_price*100)) : 0
   const isFull = (w: Wish) => w.target_price > 0 && collected(w.id) >= w.target_price
@@ -207,7 +245,7 @@ export default function WishlistPage() {
       <div className="bg-white rounded-2xl p-10 text-center max-w-md shadow-sm">
         <div style={{fontSize:48,marginBottom:12}}>⏳</div>
         <h2 className="font-serif text-2xl font-bold mb-3" style={{color:'#1A1410'}}>Freigabe ausstehend</h2>
-        <p style={{color:'#9A8878',lineHeight:1.7}}>Deine Anfrage wurde an {wishlist?.title} gesendet. Du erhältst eine Benachrichtigung sobald du freigegeben wirst.</p>
+        <p style={{color:'#9A8878',lineHeight:1.7}}>Deine Anfrage wurde gesendet. Du erhältst Zugang sobald du freigegeben wirst.</p>
       </div>
     </div>
   )
@@ -232,8 +270,23 @@ export default function WishlistPage() {
         </div>
       )}
 
+      {/* TOP NAV */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white shadow-sm">
+        <button onClick={() => router.push('/dashboard')}
+          style={{background:'none',border:'none',cursor:'pointer',color:'#5A4A3A',fontSize:14,display:'flex',alignItems:'center',gap:6}}>
+          ← Dashboard
+        </button>
+        <span className="font-serif font-bold" style={{color:'#1A1410',fontSize:16}}>
+          Wish<span style={{color:'#C9A84C'}}>Circle</span>
+        </span>
+        <button onClick={shareLink}
+          style={{background:'#C9A84C',color:'white',border:'none',borderRadius:8,padding:'6px 12px',fontSize:12,cursor:'pointer',fontWeight:600}}>
+          🔗 Link teilen
+        </button>
+      </div>
+
       {/* HERO */}
-      <div className="hero-gradient relative py-14 px-6 text-center overflow-hidden">
+      <div className="hero-gradient relative py-12 px-6 text-center overflow-hidden">
         <div className="hero-glow absolute inset-0" />
         <div className="relative">
           <p className="font-serif italic mb-2" style={{color:'#E8D08A',fontSize:13,letterSpacing:3}}>WUNSCHLISTE</p>
@@ -245,7 +298,7 @@ export default function WishlistPage() {
               📅 {new Date(wishlist.event_date).toLocaleDateString('de-DE',{day:'numeric',month:'long',year:'numeric'})}
             </p>
           )}
-          <div className="flex justify-center gap-6 mt-6">
+          <div className="flex justify-center gap-6 mt-5">
             <div className="text-center">
               <div className="font-bold text-xl" style={{color:'#C9A84C'}}>{wishes.length}</div>
               <div style={{color:'rgba(255,255,255,0.5)',fontSize:11,letterSpacing:.5}}>WÜNSCHE</div>
@@ -266,15 +319,15 @@ export default function WishlistPage() {
           <button onClick={() => setShowAddWish(true)} className="text-sm px-4 py-2 rounded-xl font-medium"
             style={{background:'#C9A84C',color:'white',border:'none',cursor:'pointer'}}>+ Wunsch hinzufügen</button>
           {pendingGuests.length > 0 && (
-            <button onClick={() => {}} className="text-sm px-4 py-2 rounded-xl font-medium"
-              style={{background:'#fff8e1',color:'#b7770d',border:'none',cursor:'pointer'}}>
-              ⏳ {pendingGuests.length} Gast-Anfrage{pendingGuests.length > 1 ? 'n' : ''}
-            </button>
+            <span className="text-sm px-4 py-2 rounded-xl font-medium"
+              style={{background:'#fff8e1',color:'#b7770d'}}>
+              ⏳ {pendingGuests.length} ausstehende Anfrage{pendingGuests.length > 1 ? 'n' : ''}
+            </span>
           )}
         </div>
       )}
 
-      {/* PENDING GUESTS (owner) */}
+      {/* PENDING GUESTS */}
       {isOwner && pendingGuests.length > 0 && (
         <div className="max-w-4xl mx-auto px-4 pt-4">
           <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -322,7 +375,14 @@ export default function WishlistPage() {
               <div key={w.id} className="wish-card flex flex-col">
                 <div className="p-4 pb-0 flex justify-between items-start">
                   <span className={`tag ${CATEGORY_CLASSES[w.category]}`}>{CATEGORY_LABELS[w.category]}</span>
-                  {isOwner && <button onClick={() => deleteWish(w.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#9A8878',fontSize:14}}>✕</button>}
+                  {isOwner && (
+                    <div className="flex gap-1">
+                      <button onClick={() => openEditWish(w)}
+                        style={{background:'none',border:'none',cursor:'pointer',color:'#C9A84C',fontSize:13}}>✏️</button>
+                      <button onClick={() => deleteWish(w.id)}
+                        style={{background:'none',border:'none',cursor:'pointer',color:'#9A8878',fontSize:13}}>✕</button>
+                    </div>
+                  )}
                 </div>
                 <div className="p-4 flex-1 flex flex-col gap-3">
                   <div>
@@ -332,11 +392,11 @@ export default function WishlistPage() {
 
                   {w.target_price > 0 && (
                     <div>
-                      <div className="flex justify-between mb-1" style={{fontSize:12}}>
+                      <div className="flex justify-between mb-1">
                         <span className="font-bold" style={{color:'#1A1410',fontSize:18}}>€{w.target_price.toFixed(2)}</span>
                         {!full
-                          ? <span style={{color:'#9A8878'}}>Offen: <span style={{color:'#C9A84C',fontWeight:600}}>€{(w.target_price-col).toFixed(2)}</span></span>
-                          : <span style={{color:'#3D7A55',fontWeight:600}}>✅ Vollständig!</span>}
+                          ? <span style={{color:'#9A8878',fontSize:12}}>Offen: <span style={{color:'#C9A84C',fontWeight:600}}>€{(w.target_price-col).toFixed(2)}</span></span>
+                          : <span style={{color:'#3D7A55',fontWeight:600,fontSize:12}}>✅ Vollständig!</span>}
                       </div>
                       <div className="progress-bar">
                         <div className="progress-fill" style={{width:`${p}%`}} />
@@ -348,12 +408,18 @@ export default function WishlistPage() {
                     </div>
                   )}
 
+                  {/* CONTRIBUTORS with edit */}
                   {contribs.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {contribs.map(c => (
-                        <span key={c.id} className="chip" style={leader && c.display_name ? {background:'#fff8e1',border:'1px solid #E8D08A'} : {}}>
+                        <span key={c.id} className="chip" style={{cursor: c.user_id===user?.id ? 'pointer' : 'default',
+                          background: leader && c.display_name===leader ? '#fff8e1' : '',
+                          border: leader && c.display_name===leader ? '1px solid #E8D08A' : ''}}
+                          onClick={() => c.user_id===user?.id && openEditContrib(c)}
+                          title={c.user_id===user?.id ? 'Klicken zum Bearbeiten' : ''}>
                           {c.display_name === leader ? '👑 ' : '👤 '}{c.display_name}
                           <span style={{color:'#C9A84C',fontWeight:600}}> €{c.amount.toFixed(2)}</span>
+                          {c.user_id===user?.id && <span style={{color:'#C9A84C',fontSize:10,marginLeft:2}}>✏️</span>}
                         </span>
                       ))}
                     </div>
@@ -408,7 +474,7 @@ export default function WishlistPage() {
                       <a href={w.purchase_url} target="_blank" rel="noopener noreferrer"
                         className="flex-1 py-2 rounded-xl text-sm font-medium text-center"
                         style={{background:'#3D7A55',color:'white',textDecoration:'none'}}>
-                        🛍️ Kauflink öffnen
+                        🛍️ Kauflink
                       </a>
                     )}
                     {!isCoord && !isOwner && w.purchase_url && (
@@ -426,17 +492,17 @@ export default function WishlistPage() {
         </div>
       </div>
 
-      {/* ════════ MODALS ════════ */}
+      {/* ═══════ MODALS ═══════ */}
 
       {/* CONTRIBUTE */}
       {showContrib && activeWish && (
-        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setShowContrib(false)}}}>
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setShowContrib(false)}}>
           <div className="modal-box">
             <h2 className="font-serif text-xl font-bold mb-4" style={{color:'#1A1410'}}>💝 Beteiligen</h2>
             <div style={{background:'#F0E8D8',borderRadius:11,padding:14,marginBottom:16}}>
               <p className="font-semibold" style={{color:'#1A1410'}}>{activeWish.title}</p>
               <p style={{fontSize:12,color:'#5A4A3A',marginTop:4}}>
-                Ziel: €{activeWish.target_price.toFixed(2)} · Gesammelt: €{collected(activeWish.id).toFixed(2)} · 
+                Ziel: €{activeWish.target_price.toFixed(2)} · Gesammelt: €{collected(activeWish.id).toFixed(2)} ·
                 Offen: <span style={{color:'#C9A84C',fontWeight:600}}>€{Math.max(0,activeWish.target_price-collected(activeWish.id)).toFixed(2)}</span>
               </p>
             </div>
@@ -453,10 +519,11 @@ export default function WishlistPage() {
               </div>
             </div>
             <div style={{background:'#fffbf0',borderLeft:'3px solid #C9A84C',padding:'10px 12px',borderRadius:'0 8px 8px 0',margin:'14px 0',fontSize:12,color:'#5A4A3A'}}>
-              ✅ Bitte überweise den Betrag per PayPal oder Banküberweisung und bestätige dann hier.
+              ✅ Bitte überweise den Betrag zuerst, dann hier bestätigen.
             </div>
             <div className="flex gap-3 mt-4">
-              <button onClick={()=>setShowContrib(false)} className="flex-1 py-2.5 rounded-xl text-sm" style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
+              <button onClick={()=>setShowContrib(false)} className="flex-1 py-2.5 rounded-xl text-sm"
+                style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
               <button onClick={submitContrib} disabled={!contribName||!contribAmt} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
                 style={{background:(!contribName||!contribAmt)?'#E8D08A':'#C9A84C',border:'none',cursor:'pointer'}}>
                 ✓ Bestätigen
@@ -466,15 +533,42 @@ export default function WishlistPage() {
         </div>
       )}
 
+      {/* EDIT CONTRIBUTION */}
+      {showEditContrib && editContrib && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setShowEditContrib(false)}}>
+          <div className="modal-box">
+            <h2 className="font-serif text-xl font-bold mb-4" style={{color:'#1A1410'}}>✏️ Beitrag bearbeiten</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>Dein Name</label>
+                <input type="text" value={ecName} onChange={e=>setEcName(e.target.value)} className="input-base" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>Betrag (€)</label>
+                <input type="number" value={ecAmt} onChange={e=>setEcAmt(e.target.value)} className="input-base" step="0.01" min="0.01" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={()=>deleteContrib(editContrib.id)} className="py-2.5 rounded-xl text-sm px-4"
+                style={{background:'#fef2f2',color:'#c0392b',border:'none',cursor:'pointer'}}>🗑️ Löschen</button>
+              <button onClick={()=>setShowEditContrib(false)} className="flex-1 py-2.5 rounded-xl text-sm"
+                style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
+              <button onClick={saveEditContrib} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{background:'#C9A84C',border:'none',cursor:'pointer'}}>Speichern</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CHAT */}
       {showChat && activeWish && (
-        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setShowChat(false)}}}>
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setShowChat(false)}}>
           <div className="modal-box flex flex-col" style={{height:'80vh',maxHeight:600}}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-serif text-xl font-bold" style={{color:'#1A1410'}}>💬 {activeWish.title}</h2>
               <button onClick={()=>setShowChat(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#9A8878',fontSize:20}}>✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 mb-4" style={{padding:'4px 0'}}>
+            <div className="flex-1 overflow-y-auto space-y-3 mb-4">
               {messages.length === 0 && <p style={{color:'#9A8878',textAlign:'center',fontSize:13,marginTop:20}}>Noch keine Nachrichten.</p>}
               {messages.map(m => (
                 <div key={m.id} className={`flex ${m.user_id === user?.id ? 'justify-end' : 'justify-start'}`}>
@@ -532,15 +626,57 @@ export default function WishlistPage() {
                 <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>🔒 Kauflink (nur für Koordinatoren)</label>
                 <input type="url" value={wUrl} onChange={e=>setWUrl(e.target.value)} className="input-base" placeholder="https://..." />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={wSingle} onChange={e=>setWSingle(e.target.checked)} />
-                <span style={{fontSize:13,color:'#5A4A3A'}}>Eine Person kauft alleine (kein Gruppenfinanzierung)</span>
-              </label>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={()=>setShowAddWish(false)} className="flex-1 py-2.5 rounded-xl text-sm" style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
+              <button onClick={()=>setShowAddWish(false)} className="flex-1 py-2.5 rounded-xl text-sm"
+                style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
               <button onClick={addWish} disabled={!wTitle} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
                 style={{background:!wTitle?'#E8D08A':'#C9A84C',border:'none',cursor:'pointer'}}>Hinzufügen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT WISH */}
+      {showEditWish && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setShowEditWish(false)}}>
+          <div className="modal-box">
+            <h2 className="font-serif text-xl font-bold mb-5" style={{color:'#1A1410'}}>✏️ Wunsch bearbeiten</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>Titel *</label>
+                <input type="text" value={ewTitle} onChange={e=>setEwTitle(e.target.value)} className="input-base" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>Beschreibung</label>
+                <textarea value={ewDesc} onChange={e=>setEwDesc(e.target.value)} className="input-base" rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>Kategorie</label>
+                  <select value={ewCat} onChange={e=>setEwCat(e.target.value)} className="input-base">
+                    <option value="product">🛍️ Produkt</option>
+                    <option value="event">🎭 Veranstaltung</option>
+                    <option value="voucher">🎫 Gutschein</option>
+                    <option value="local">🏪 Lokales Geschenk</option>
+                    <option value="other">🎁 Sonstiges</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>Zielpreis (€)</label>
+                  <input type="number" value={ewPrice} onChange={e=>setEwPrice(e.target.value)} className="input-base" step="0.01" min="0" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>🔒 Kauflink</label>
+                <input type="url" value={ewUrl} onChange={e=>setEwUrl(e.target.value)} className="input-base" placeholder="https://..." />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={()=>setShowEditWish(false)} className="flex-1 py-2.5 rounded-xl text-sm"
+                style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
+              <button onClick={saveEditWish} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{background:'#C9A84C',border:'none',cursor:'pointer'}}>Speichern</button>
             </div>
           </div>
         </div>
@@ -553,7 +689,7 @@ export default function WishlistPage() {
             <div style={{background:'linear-gradient(135deg,#1a1410,#2e1f14)',borderRadius:14,padding:20,textAlign:'center',marginBottom:16,color:'white'}}>
               <div style={{fontSize:36,marginBottom:8}}>🔐</div>
               <h3 className="font-serif text-lg font-bold mb-1">Koordinator-Zugang</h3>
-              <p style={{fontSize:12,color:'rgba(255,255,255,0.65)',lineHeight:1.5}}>Nur für Personen, die Geschenke kaufen. Das Geburtstagskind kennt diesen PIN nicht.</p>
+              <p style={{fontSize:12,color:'rgba(255,255,255,0.65)',lineHeight:1.5}}>Nur für Personen, die Geschenke kaufen.</p>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1" style={{color:'#5A4A3A'}}>PIN eingeben</label>
@@ -562,8 +698,10 @@ export default function WishlistPage() {
               {coordErr && <p style={{color:'#c0392b',fontSize:12,marginTop:4}}>{coordErr}</p>}
             </div>
             <div className="flex gap-3 mt-4">
-              <button onClick={()=>{setShowCoordLogin(false);setCoordErr('')}} className="flex-1 py-2.5 rounded-xl text-sm" style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
-              <button onClick={tryCoordLogin} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{background:'#3D7A55',border:'none',cursor:'pointer'}}>🔓 Einloggen</button>
+              <button onClick={()=>{setShowCoordLogin(false);setCoordErr('')}} className="flex-1 py-2.5 rounded-xl text-sm"
+                style={{background:'#F0E8D8',color:'#5A4A3A',border:'none',cursor:'pointer'}}>Abbrechen</button>
+              <button onClick={tryCoordLogin} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+                style={{background:'#3D7A55',border:'none',cursor:'pointer'}}>🔓 Einloggen</button>
             </div>
           </div>
         </div>
